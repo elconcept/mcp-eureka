@@ -1,6 +1,6 @@
 {
   "name": "@matematicsolutions/mcp-eureka",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server - Polish tax interpretations (KIS/MF) via EUREKA (eureka.mf.gov.pl)",
   "main": "dist/index.js",
   "scripts": {

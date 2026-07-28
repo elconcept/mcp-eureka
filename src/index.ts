@@ -671,7 +671,7 @@ function validateArgs(
 }
 
 const server = new Server(
-    { name: "mcp-eureka", version: "0.1.0" }, // keep in sync with package.json "version"
+    { name: "mcp-eureka", version: "0.2.0" }, // keep in sync with package.json "version"
     { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
 );
 
