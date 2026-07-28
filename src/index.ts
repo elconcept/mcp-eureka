@@ -452,6 +452,7 @@ const INSTRUCTIONS = `Ten serwer MCP udostepnia system EUREKA Ministerstwa Finan
 
 Tool zwraca \`isError: true\` + tekst z prefixem \`[code]\`. Kody:
 - \`missing_arg\` - brak wymaganego parametru (id / signature). Przeczytaj inputSchema.
+- \`invalid_args\` - parametr ma zly TYP wobec inputSchema (np. category_ids jako tekst zamiast listy). Popraw typ i powtorz - to blad wywolania, nie zrodla.
 - \`not_found\` - dokument o tym ID nie istnieje w EUREKA.
 - \`invalid_filter\` - zly ksztalt filtra (np. category_ids nie-numeryczne).
 - \`upstream_error\` - blad API EUREKA (HTTP 5xx, timeout 40s). Retry raz przed surface do uzytkownika.
@@ -591,7 +592,7 @@ const TOOLS = [
 // MCP Server setup
 // ---------------------------------------------------------------------------
 
-type ErrorCode = "missing_arg" | "not_found" | "upstream_error" | "invalid_filter";
+type ErrorCode = "missing_arg" | "invalid_args" | "not_found" | "upstream_error" | "invalid_filter";
 
 function errorResult(text: string, code: ErrorCode) {
     return {
@@ -599,6 +600,74 @@ function errorResult(text: string, code: ErrorCode) {
         structuredContent: { error_code: code },
         isError: true,
     };
+}
+
+// --- Walidacja argumentow wobec ZADEKLAROWANEGO inputSchema ---------------
+// setRequestHandler(CallToolRequestSchema) ze SDK waliduje tylko KOPERTE zadania;
+// pola `arguments` NIE sprawdza wobec inputSchema danego toola, wiec deklaracja
+// schematu byla wylacznie dokumentacja dla modelu, bez egzekucji. Zewnetrzny audyt
+// (Ahmad-Faraj/mcp-conformance, check `tools-call-invalid-args`) zlapal to na
+// 4 konektorach floty.
+// Zakres celowo waski: TYPY + pola WYMAGANE. `enum` NIE jest egzekwowany - dotad
+// wartosc spoza listy szla do upstreamu i czasem dzialala, wiec zaostrzenie tego
+// byloby zmiana zachowania szersza niz naprawiana wada (osobna decyzja).
+// Nieznane pola przepuszczamy swiadomie (forward-compat ze starszymi klientami).
+type JsonType = "string" | "number" | "integer" | "boolean" | "array" | "object";
+
+function typeOk(v: unknown, t: JsonType): boolean {
+    switch (t) {
+        case "string":  return typeof v === "string";
+        case "number":  return typeof v === "number" && Number.isFinite(v);
+        case "integer": return typeof v === "number" && Number.isInteger(v);
+        case "boolean": return typeof v === "boolean";
+        case "array":   return Array.isArray(v);
+        case "object":  return typeof v === "object" && v !== null && !Array.isArray(v);
+        default:        return true;
+    }
+}
+
+function describeType(v: unknown): string {
+    if (Array.isArray(v)) return "array";
+    if (v === null) return "null";
+    return typeof v;
+}
+
+// Zwraca {msg, code} albo null. Kod rozrozniony celowo: BRAK pola wymaganego to
+// nadal `missing_arg` (tak bylo przed ta zmiana i tak moga na to patrzec klienci),
+// a `invalid_args` jest NOWE i dotyczy wylacznie zlego TYPU. Inaczej ta poprawka
+// po cichu przemianowalaby istniejacy blad.
+function validateArgs(
+    toolName: string,
+    args: Record<string, unknown>,
+): { msg: string; code: ErrorCode } | null {
+    const tool = TOOLS.find((t) => t.name === toolName);
+    if (!tool) return null;
+    const schema = tool.inputSchema as unknown as {
+        properties?: Record<string, { type?: string | string[] }>;
+        required?: readonly string[];
+    };
+    for (const req of schema.required ?? []) {
+        if (args[req] === undefined || args[req] === null) {
+            return { msg: `parametr '${req}' jest wymagany.`, code: "missing_arg" };
+        }
+    }
+    for (const [key, val] of Object.entries(args)) {
+        if (val === undefined || val === null) continue;
+        const spec = schema.properties?.[key];
+        if (!spec || !spec.type) continue;
+        // `type` w JSON Schema moze byc UNIA (np. ["string","number"] w id).
+        // Bez normalizacji takie pole wpadalo w `default: return true`, czyli
+        // bylo ciche NIE-walidowane - zlapane przez generyczny test, nie przez
+        // czytanie kodu.
+        const types = (Array.isArray(spec.type) ? spec.type : [spec.type]) as JsonType[];
+        if (!types.some((t) => typeOk(val, t))) {
+            return {
+                msg: `parametr '${key}' ma byc typu ${types.join(" | ")}, dostano ${describeType(val)}.`,
+                code: "invalid_args",
+            };
+        }
+    }
+    return null;
 }
 
 const server = new Server(
@@ -630,6 +699,11 @@ async function categoryNameFor(detail: EurekaDetail): Promise<string | undefined
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     const a = (args ?? {}) as Record<string, unknown>;
+
+    // Bramka typow PRZED dispatchem - zeby zly typ konczyl sie czytelnym bledem
+    // narzedzia, a nie zapytaniem do upstreamu ze smieciem w parametrze.
+    const invalid = validateArgs(name, a);
+    if (invalid) return errorResult(invalid.msg, invalid.code);
 
     try {
         switch (name) {
