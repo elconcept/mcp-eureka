@@ -1,0 +1,134 @@
+{
+  "package_version": "0.2.0",
+  "toolset_sha256": "07b851a67204f7286027747baca095bd5482e74e856696b183f64777dcaaa4e4",
+  "tools": {
+    "get_interpretation": {
+      "sha256": "83c7a9ce380c4300347e29fa3556d36844c934c722a1df63b69b3e8744b2cf08",
+      "descriptor": {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": true,
+          "readOnlyHint": true
+        },
+        "description": "Pobiera pelny dokument EUREKA po ID_INFORMACJI (z wynikow 'search'). Zwraca metadane (sygnatura, kategoria, daty), teze i pierwsze 3000 znakow pelnej tresci (HTML odarty do tekstu). Bledy: `missing_arg` (brak id), `not_found` (id poza baza), `upstream_error`.",
+        "inputSchema": {
+          "properties": {
+            "id": {
+              "description": "Numeryczne ID_INFORMACJI, np. 698723 lub '698723'.",
+              "type": [
+                "string",
+                "number"
+              ]
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "name": "get_interpretation"
+      }
+    },
+    "list_categories": {
+      "sha256": "922820157f8c6510ac60f373450d3ab5f1533ea100a2c98b323e74d21321547c",
+      "descriptor": {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": true,
+          "readOnlyHint": true
+        },
+        "description": "Zwraca slownik kategorii dokumentow EUREKA (id -> nazwa, 28 pozycji): interpretacje indywidualne/ogolne, objasnienia podatkowe, WIS, WIA, orzeczenia sadow itd. Uzyj id w parametrze category_ids narzedzia search. Bledy: `upstream_error`.",
+        "inputSchema": {
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "name": "list_categories"
+      }
+    },
+    "search": {
+      "sha256": "94bb492ea7c17a55ecdaf66c2ce80fc9a4206b8c8a96578363b590a3b5f75226",
+      "descriptor": {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": true,
+          "readOnlyHint": true
+        },
+        "description": "Przeszukuje EUREKA (eureka.mf.gov.pl) - 550 000+ dokumentow praktyki podatkowej Ministerstwa Finansow i KIS: interpretacje indywidualne (517 000+), interpretacje ogolne, objasnienia podatkowe, WIS, WIA. Fraza (query) szuka slow niezaleznie; filtry: sygnatura (takze prefiks), kategoria (category_ids ze slownika list_categories), zakres dat wydania. Wyniki sortowane data wydania malejaco. Bledy: `invalid_filter` (zly filtr), `upstream_error` (HTTP/timeout).",
+        "inputSchema": {
+          "properties": {
+            "category_ids": {
+              "description": "Id kategorii ze slownika (list_categories). Np. [1] = interpretacja indywidualna, [3] = interpretacja ogolna, [11] = objasnienia podatkowe.",
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "date_from": {
+              "description": "Data wydania od (YYYY-MM-DD).",
+              "type": "string"
+            },
+            "date_to": {
+              "description": "Data wydania do (YYYY-MM-DD).",
+              "type": "string"
+            },
+            "full_phrase": {
+              "description": "true = fraza musi wystapic DOKLADNIE (czesto 0 trafien); false (domyslnie) = slowa niezaleznie.",
+              "type": "boolean"
+            },
+            "page": {
+              "description": "Numer strony (od 0). Do paginacji.",
+              "minimum": 0,
+              "type": "number"
+            },
+            "page_size": {
+              "description": "Liczba wynikow na strone (1-50). Domyslnie 10.",
+              "maximum": 50,
+              "minimum": 1,
+              "type": "number"
+            },
+            "query": {
+              "description": "Fraza wyszukiwania, np. 'fotowoltaika' albo 'ulga badawczo-rozwojowa'.",
+              "type": "string"
+            },
+            "signature": {
+              "description": "Sygnatura dokumentu, pelna ('0112-KDIL3.4012.367.2026.2.AK') lub prefiks ('0112-KDIL3').",
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "name": "search"
+      }
+    },
+    "search_by_signature": {
+      "sha256": "09adba6334b2d1120356bfe1073572f500ad66d87b5554161f9b3e8b2b1ed166",
+      "descriptor": {
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": true,
+          "readOnlyHint": true
+        },
+        "description": "Skrot: szuka dokumentu po sygnaturze (pelnej lub prefiksie). Odpowiednik search z parametrem signature. Bledy: `missing_arg` (brak signature), `upstream_error`.",
+        "inputSchema": {
+          "properties": {
+            "signature": {
+              "description": "Sygnatura, np. '0112-KDIL3.4012.367.2026.2.AK' albo prefiks '0114-KDIP2'.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "signature"
+          ],
+          "type": "object"
+        },
+        "name": "search_by_signature"
+      }
+    }
+  }
+}
